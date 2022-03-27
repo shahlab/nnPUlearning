@@ -6,6 +6,7 @@ import tarfile
 import pickle
 from sklearn.datasets import fetch_openml
 
+
 def get_mnist():
     mnist = fetch_openml('mnist_784', data_home=".")
 

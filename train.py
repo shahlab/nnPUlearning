@@ -265,7 +265,7 @@ def main(arguments):
     trainer.extend(MultiEvaluator(test_iter, models, device=args.gpu))
     trainer.extend(extensions.ProgressBar())
     trainer.extend(extensions.PrintReport(
-                ['epoch', 'train/nnPU/error', 'test/nnPU/error', 'train/uPU/error', 'test/uPU/error',
+                ['epoch', 'train/nnPU/error', 'test/nnPU/error',
                  'test/nnPU/percPos', 'test/nnPU/percPosNF', 'test/nnPU/recall', 'elapsed_time']))
     if extensions.PlotReport.available():
             trainer.extend(

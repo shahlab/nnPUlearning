@@ -11,6 +11,7 @@ from chainer.backends import cuda
 from sklearn.metrics import recall_score
 from functools import partial
 
+
 class MyClassifier(Chain):
     prior = 0
 
