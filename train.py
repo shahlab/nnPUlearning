@@ -1,6 +1,10 @@
 import six
 import copy
 import argparse
+
+import warnings
+warnings.filterwarnings('ignore')
+
 import chainer
 import numpy as np
 import sys
@@ -27,12 +31,13 @@ def process_args(arguments):
     parser.add_argument('--gpu', '-g', type=int, default=-1,
                         help='Zero-origin GPU ID (negative value indicates CPU)')
     parser.add_argument('--preset', '-p', type=str, default=None,
-                        choices=['figure1', 'exp-mnist', 'exp-cifar'],
+                        choices=['figure1', 'exp-mnist', 'exp-cifar', 'exp-gene'],
                         help="Preset of configuration\n"
                              "figure1: The setting of Figure1\n"
                              "exp-mnist: The setting of MNIST experiment in Experiment\n"
-                             "exp-cifar: The setting of CIFAR10 experiment in Experiment")
-    parser.add_argument('--dataset', '-d', default='mnist', type=str, choices=['mnist', 'cifar10'],
+                             "exp-cifar: The setting of CIFAR10 experiment in Experiment\n"
+                             "exp-gene: The setting of gene experiment\n")
+    parser.add_argument('--dataset', '-d', default='mnist', type=str, choices=['mnist', 'cifar10', 'gene'],
                         help='The dataset name')
     parser.add_argument('--labeled', '-l', default=100, type=int,
                         help='# of labeled data')
@@ -74,13 +79,21 @@ def process_args(arguments):
         args.batchsize = 500
         args.model = "cnn"
         args.stepsize = 1e-5
+    elif args.preset == "exp-gene":
+        args.labeled = 100
+        args.unlabeled = 100000
+        args.dataset = "gene"
+        args.batchsize = 2000
+        args.model = "mlp"
+        args.stepsize = 1e-5
+
     assert (args.batchsize > 0)
     assert (args.epoch > 0)
     assert (0 < args.labeled < 30000)
+
     if args.dataset == "mnist":
         assert (0 < args.unlabeled <= 60000)
-    else:
-        assert (0 < args.unlabeled <= 50000)
+
     assert (0. <= args.beta)
     assert (0. <= args.gamma <= 1.)
     return args
@@ -217,6 +230,7 @@ class MultiPUEvaluator(chainer.training.extensions.Evaluator):
             summary.add(observation)
         return summary.compute_mean()
 
+
 def main(arguments):
     args = process_args(arguments)
     # dataset setup
@@ -225,6 +239,9 @@ def main(arguments):
     train_iter = chainer.iterators.SerialIterator(XYtrain, args.batchsize)
     valid_iter = chainer.iterators.SerialIterator(XYtrain, args.batchsize, repeat=False, shuffle=False)
     test_iter = chainer.iterators.SerialIterator(XYtest, args.batchsize, repeat=False, shuffle=False)
+
+    # print(XYtrain[0][0].shape)
+    # print(XYtrain[0][1].shape)
 
     # model setup
     loss_type = select_loss(args.loss)
@@ -248,7 +265,8 @@ def main(arguments):
     trainer.extend(MultiEvaluator(test_iter, models, device=args.gpu))
     trainer.extend(extensions.ProgressBar())
     trainer.extend(extensions.PrintReport(
-                ['epoch', 'train/nnPU/error', 'test/nnPU/error', 'train/uPU/error', 'test/uPU/error', 'elapsed_time']))
+                ['epoch', 'train/nnPU/error', 'test/nnPU/error', 'train/uPU/error', 'test/uPU/error',
+                 'test/nnPU/percPos', 'test/nnPU/percPosNF', 'test/nnPU/recall', 'elapsed_time']))
     if extensions.PlotReport.available():
             trainer.extend(
                 extensions.PlotReport(['train/nnPU/error', 'train/uPU/error'], 'epoch', file_name='training_error.png'))
