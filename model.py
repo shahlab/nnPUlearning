@@ -14,6 +14,7 @@ from functools import partial
 
 class MyClassifier(Chain):
     prior = 0
+    it_position = None
 
     def __call__(self, x, t, loss_func):
         self.clear()
@@ -48,6 +49,7 @@ class MyClassifier(Chain):
         t, h = t.get(), h.get()
 
         h_separated = ','.join([str(x) for x in h]) + '\n'
+        h_separated = str(self.it_position) + ',' + h_separated
 
         with open('result/preds.csv', 'a') as f:
             f.write(h_separated)
