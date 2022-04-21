@@ -1,9 +1,12 @@
 import numpy as np
+import pandas as pd
 import urllib.request
 import os
+import config
 import tarfile
 import pickle
 from sklearn.datasets import fetch_openml
+
 
 def get_mnist():
     mnist = fetch_openml('mnist_784', data_home=".")
@@ -139,6 +142,64 @@ def make_dataset(dataset, n_labeled, n_unlabeled):
     return list(zip(x_train, y_train)), list(zip(x_test, y_test)), prior
 
 
+def read_riboseq_data(prior=0.05):
+    if os.path.exists(config.saved_data_path):
+        with open(config.saved_data_path, "rb") as f:
+            data = pickle.load(f)
+
+        x_train = data["X_train"]
+        x_test = data["X_test"]
+        y_train = data["y_train"]
+        y_test = data["y_test"]
+        prior = data["prior"]
+        fake_pos = data["fake_pos"]
+        gene = data["gene"]
+    else:
+        df = pd.read_csv(config.raw_data_path)
+
+        df['is_start_position'] = df['is_start_position'].replace({True: 1, False: -1})
+
+        position = df['position'].values
+        gene = df['gene'].values
+
+        y_orig = df['is_start_position'].values
+
+        n_fake_pos = 100
+        fake_pos = np.random.permutation(df[df['is_start_position'] == 1]['position'])[:n_fake_pos]
+
+        df['fake_label'] = df['is_start_position'].copy()
+        df.loc[df['position'].isin(fake_pos), 'fake_label'] = -1
+
+        x_train = df.drop(
+            ['Unnamed: 0', 'position', 'gene', 'is_start_position', 'fake_label'], axis=1
+        ).values
+        y_train = df['fake_label'].values
+
+        x_test = df[df['fake_label'] == -1].drop(
+            ['Unnamed: 0', 'position', 'gene', 'is_start_position', 'fake_label'], axis=1
+        ).values
+        y_test = df[df['fake_label'] == -1]['is_start_position'].values
+
+        x_train, y_train = np.asarray(x_train, dtype=np.float32), np.asarray(y_train, dtype=np.int32)
+        x_test, y_test = np.asarray(x_test, dtype=np.float32), np.asarray(y_test, dtype=np.int32)
+
+        x_train = x_train.reshape((-1, 1, 31, 21))
+        x_test = x_test.reshape((-1, 1, 31, 21))
+
+        with open(config.saved_data_path, 'wb') as f:
+            pickle.dump({
+                'X_train': x_train,
+                'y_train': y_train,
+                'X_test': x_test,
+                'y_test': y_test,
+                'prior': prior,
+                'fake_pos': fake_pos,
+                'gene': gene
+            }, f)
+
+    return list(zip(x_train, y_train)), list(zip(x_test, y_test)), prior, fake_pos, gene
+
+
 def load_dataset(dataset_name, n_labeled, n_unlabeled):
     if dataset_name == "mnist":
         (x_train, y_train), (x_test, y_test) = get_mnist()
@@ -146,7 +207,12 @@ def load_dataset(dataset_name, n_labeled, n_unlabeled):
     elif dataset_name == "cifar10":
         (x_train, y_train), (x_test, y_test) = get_cifar10()
         y_train, y_test = binarize_cifar10_class(y_train, y_test)
+    elif dataset_name == "gene":
+        xy_train, xy_test, prior, _, _ = read_riboseq_data()
     else:
         raise ValueError("dataset name {} is unknown.".format(dataset_name))
-    xy_train, xy_test, prior = make_dataset(((x_train, y_train), (x_test, y_test)), n_labeled, n_unlabeled)
+
+    if dataset_name != "gene":
+        xy_train, xy_test, prior = make_dataset(((x_train, y_train), (x_test, y_test)), n_labeled, n_unlabeled)
+
     return xy_train, xy_test, prior
